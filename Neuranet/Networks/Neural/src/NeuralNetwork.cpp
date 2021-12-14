@@ -4,6 +4,7 @@
 #include <direct.h>
 #include "../headers/NeuralNetwork.hpp"
 #include "../../../Util/headers/Image.hpp"
+#include "../../../Util/headers/Dataset.hpp"
 
 namespace Neuranet
 {
@@ -124,9 +125,22 @@ namespace Neuranet
 		}
 	}
 
+	void NeuralNetwork::learn(std::string& inputsFilePath, std::string& expectedOutputsFilePath, uint16_t epochs, uint16_t batchSize, double learningRate)
+	{
+		std::vector<Matrix2D> ins;
+		std::vector<Matrix2D> expouts;
+		Dataset::parse(inputsFilePath, expectedOutputsFilePath, ins, expouts);
+		learn(ins, expouts, epochs, batchSize, learningRate);
+	}
+
 	void NeuralNetwork::learn(const std::vector<Matrix2D>& inputs, const std::vector<Matrix2D>& expectedOutputs, uint16_t epochs, uint16_t batchSize)
 	{
 		learn(inputs, expectedOutputs, epochs, batchSize, 1.0);
+	}
+
+	void NeuralNetwork::learn(std::string& inputsFilePath, std::string& expectedOutputsFilePath, uint16_t epochs, uint16_t batchSize)
+	{
+		learn(inputsFilePath, expectedOutputsFilePath, epochs, batchSize, 1.0);
 	}
 
 	void NeuralNetwork::learn(const std::vector<Matrix2D>& inputs, const std::vector<Matrix2D>& expectedOutputs, uint16_t epochs)
@@ -134,9 +148,19 @@ namespace Neuranet
 		learn(inputs, expectedOutputs, epochs, 1, 1.0);
 	}
 
+	void NeuralNetwork::learn(std::string& inputsFilePath, std::string& expectedOutputsFilePath, uint16_t epochs)
+	{
+		learn(inputsFilePath, expectedOutputsFilePath, epochs, 1, 1.0);
+	}
+
 	void NeuralNetwork::learn(const std::vector<Matrix2D>& inputs, const std::vector<Matrix2D>& expectedOutputs)
 	{
 		learn(inputs, expectedOutputs, 1, 1, 1.0);
+	}
+
+	void NeuralNetwork::learn(std::string& inputsFilePath, std::string& expectedOutputsFilePath)
+	{
+		learn(inputsFilePath, expectedOutputsFilePath, 1, 1, 1.0);
 	}
 
 	void NeuralNetwork::getGradients(const Matrix2D& input, const Matrix2D& expectedOutput, std::vector<Matrix2D>& weightGradients, std::vector<Matrix2D>& biasGradients)
@@ -242,7 +266,7 @@ namespace Neuranet
 
 		for (int index = 0; index < this->weights.size(); index += 1) {
 			out += std::format("\nWeights:{}\nBiases:{}", weights[index].toString(), biases[index].toString());
-			out += std::format("\nLAYER {} ({} nodes)\n", index + 2, weights[index].getRowCount());
+			out += std::format("\n\tLAYER {} ({} nodes)\n", index + 2, weights[index].getRowCount());
 		}
 		out += "\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
 		return out;
@@ -258,7 +282,7 @@ namespace Neuranet
 
 		for (int index = 0; index < a.weights.size(); index += 1) {
 			out += std::format("\nWeights:{}\nBiases:{}", Matrix2D(a.weights[index]).toString(), Matrix2D(a.biases[index]).toString());
-			out += std::format("\nLAYER {} ({} nodes)\n", index + 2, a.weights[index].getRowCount());
+			out += std::format("\n\tLAYER {} ({} nodes)\n", index + 2, a.weights[index].getRowCount());
 		}
 		out += "\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
 

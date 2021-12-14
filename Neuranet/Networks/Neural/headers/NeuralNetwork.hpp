@@ -76,7 +76,7 @@ namespace Neuranet
 
 		/**
 		 * @brief Provides the neural network with datapoints to test and adapt the model to.
-		 * 
+		 *
 		 * @param inputs The list of input matrices.
 		 * @param expectedOutputs The list of expected output matrices.
 		 * @param epochs The number of times for the model to learn from the dataset.
@@ -84,6 +84,17 @@ namespace Neuranet
 		 * @param learningRate The learning rate of the model. Standard is 1.0.
 		 */
 		void learn(const std::vector<Matrix2D>& inputs, const std::vector<Matrix2D>& expectedOutputs, uint16_t epochs, uint16_t batchSize, double learningRate);
+
+		/**
+		 * @brief Provides the neural network with datapoints to test and adapt the model to.
+		 *
+		 * @param inputs The file name of the list of input matrices (.csv).
+		 * @param expectedOutputs The file name of the list of expected output matrices (.csv).
+		 * @param epochs The number of times for the model to learn from the dataset.
+		 * @param batchSize The number of input/outputs to get gradients from before modifying the weights and biases of the model with the averaged gradients.
+		 * @param learningRate The learning rate of the model. Standard is 1.0.
+		 */
+		void learn(std::string& inputsFilePath, std::string& expectedOutputsFilePath, uint16_t epochs, uint16_t batchSize, double learningRate);
 
 		/**
 		 * @brief Provides the neural network with datapoints to test and adapt the model to. Defaults the learning
@@ -98,6 +109,17 @@ namespace Neuranet
 
 		/**
 		 * @brief Provides the neural network with datapoints to test and adapt the model to. Defaults the learning
+		 *		  rate to 1.0.
+		 *
+		 * @param inputs The file name of the list of input matrices (.csv).
+		 * @param expectedOutputs The file name of the list of expected output matrices (.csv).
+		 * @param epochs The number of times for the model to learn from the dataset.
+		 * @param batchSize The number of input/outputs to get gradients from before modifying the weights and biases of the model with the averaged gradients.
+		 */
+		void learn(std::string& inputsFilePath, std::string& expectedOutputsFilePath, uint16_t epochs, uint16_t batchSize);
+
+		/**
+		 * @brief Provides the neural network with datapoints to test and adapt the model to. Defaults the learning
 		 *		  rate to 1.0 and the batchSize to 1.
 		 *
 		 * @param inputs The list of input matrices.
@@ -108,12 +130,31 @@ namespace Neuranet
 
 		/**
 		 * @brief Provides the neural network with datapoints to test and adapt the model to. Defaults the learning
+		 *		  rate to 1.0 and batch size to 1.
+		 *
+		 * @param inputs The file name of the list of input matrices (.csv).
+		 * @param expectedOutputs The file name of the list of expected output matrices (.csv).
+		 * @param epochs The number of times for the model to learn from the dataset.
+		 */
+		void learn(std::string& inputsFilePath, std::string& expectedOutputsFilePath, uint16_t epochs);
+
+		/**
+		 * @brief Provides the neural network with datapoints to test and adapt the model to. Defaults the learning
 		 *		  rate to 1.0, the batchSize to 1, and the epochs to 1.
 		 *
 		 * @param inputs The list of input matrices.
 		 * @param expectedOutputs The list of expected output matrices.
 		 */
 		void learn(const std::vector<Matrix2D>& inputs, const std::vector<Matrix2D>& expectedOutputs);
+
+		/**
+		 * @brief Provides the neural network with datapoints to test and adapt the model to. Defaults the learning
+		 *		  rate to 1.0, batch size to 1, and epochs to 1.
+		 *
+		 * @param inputs The file name of the list of input matrices (.csv).
+		 * @param expectedOutputs The file name of the list of expected output matrices (.csv).
+		 */
+		void learn(std::string& inputsFilePath, std::string& expectedOutputsFilePath);
 		
 		/**
 		 * @brief Gets the gradients for the weights and biases with respect to the loss function,
