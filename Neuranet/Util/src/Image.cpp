@@ -29,6 +29,7 @@ namespace Neuranet
 		}
 
 		stbi_write_png(fileName.c_str(), w, h, 3, rgb_image, w * 3);
+		free(rgb_image);
 	}
 
 	void Image::write(std::string& fileName, const Matrix2D& pixels)
@@ -48,6 +49,7 @@ namespace Neuranet
 		}
 
 		stbi_write_png(fileName.c_str(), w, h, 1, grayscale_image, w);
+		free(grayscale_image);
 	}
 
 	void Image::read(std::string& fileName, Matrix3D& pixels)

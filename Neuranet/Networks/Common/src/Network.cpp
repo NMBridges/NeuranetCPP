@@ -5,9 +5,46 @@
 
 namespace Neuranet
 {
-	double Network::loss(const Matrix2D& expectedOutput, const Matrix2D& output)
+	double Network::loss(const Matrix2D& expectedOutput, const Matrix2D& output, Loss lossType)
 	{
-		return Matrix2D::power(Matrix2D(expectedOutput) - output, 2.0).getSumOfEntries() / (output.getRowCount() * output.getColumnCount());
+		switch (lossType)
+		{
+		case Loss::EUCLIDEAN:
+			return Matrix2D::power(Matrix2D(expectedOutput) - output, 2.0).getSumOfEntries() / (output.getRowCount() * output.getColumnCount());
+		case Loss::NEGATIVE_LOG:
+			return -Matrix2D::hadamardProduct(Matrix2D::logarithmic(output), expectedOutput).getSumOfEntries();
+		default:
+			return 0;
+		}
+	}
+
+	std::tuple<double, double> Network::getWeightBounds(uint16_t numInputs, uint16_t numOutputs, Activation activationType)
+	{
+		std::tuple<double, double> out;
+
+		switch (activationType)
+		{
+		case Activation::SIGMOID:
+			// Normalized Xavier Weight Initialization
+			std::get<0>(out) = -sqrt(6) / sqrt(numInputs + numOutputs);
+			std::get<1>(out) = sqrt(6) / sqrt(numInputs + numOutputs);
+			break;
+		case Activation::RELU:
+			// He Weight Initialization
+			std::get<0>(out) = 0.001;
+			std::get<1>(out) = sqrt(2 / numInputs);
+			break;
+		case Activation::RELU_NORMALIZED:
+			// He Weight Initialization
+			std::get<0>(out) = 0.001;
+			std::get<1>(out) = sqrt(2 / numInputs);
+			break;
+		default:
+			std::get<0>(out) = -1.0;
+			std::get<1>(out) = 1.0;
+		}
+
+		return out;
 	}
 
 	double Network::sigmoid(double input)
@@ -20,8 +57,28 @@ namespace Neuranet
 		return std::max(0.0, input);
 	}
 
+	Matrix2D Network::softmax(Matrix2D& input)
+	{
+		double max = input.getValues()[input.getIndexOfMax()];
+		Matrix2D raised = Matrix2D::exponential(input - Matrix2D::random(input.getRowCount(), input.getColumnCount(), max, max));
+		return (raised / raised.getSumOfEntries());
+	}
+
+	Matrix3D Network::softmax(Matrix3D& input)
+	{
+		double max = input.getValues()[input.getIndexOfMax()];
+		Matrix3D raised = Matrix3D::exponential(input - Matrix3D::random(input.getRowCount(), input.getColumnCount(), input.getLayerCount(), max, max));
+		return (raised / raised.getSumOfEntries());
+	}
+
 	void Network::activate(Matrix2D& input, Activation activationType)
 	{
+		if (activationType == Activation::SOFTMAX)
+		{
+			input = softmax(input);
+			return;
+		}
+
 		double maxValue = DBL_MIN;
 
 		for (uint16_t row = 0; row < input.getRowCount(); row += 1)
@@ -55,6 +112,12 @@ namespace Neuranet
 
 	void Network::activate(Matrix3D& input, Activation activationType)
 	{
+		if (activationType == Activation::SOFTMAX)
+		{
+			input = softmax(input);
+			return;
+		}
+
 		double maxValue = DBL_MIN;
 
 		for (uint16_t row = 0; row < input.getRowCount(); row += 1)
@@ -91,6 +154,14 @@ namespace Neuranet
 
 	Matrix2D Network::activateDerivative(Matrix2D& input, Activation activationType)
 	{
+		if (activationType == Activation::SOFTMAX)
+		{
+			Matrix2D s = softmax(input);
+			double sum = s.getSumOfEntries();
+			Matrix2D deriv = s - (input * sum);
+			return deriv;
+		}
+
 		Matrix2D derivative(input.getRowCount(), input.getColumnCount());
 
 		for (uint16_t row = 0; row < input.getRowCount(); row += 1)

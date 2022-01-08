@@ -27,7 +27,7 @@ namespace Neuranet
         /**
          * @brief Construct a new Matrix3D object with size 0.
          */
-        Matrix3D() : Matrix3D(0, 0, 0, (double*)new double[0]) {};
+        Matrix3D() : Matrix3D(0, 0, 0, nullptr) {};
         
         /**
          * @brief Construct a new Matrix3D object with the specified dimensions and values.
@@ -37,7 +37,7 @@ namespace Neuranet
         /**
          * @brief Construct a new Matrix3D object with the specified dimensions (default values = 0.0).
          */
-        Matrix3D(uint16_t rows, uint16_t columns, uint16_t layers) : Matrix3D(rows, columns, layers, (double*)new double[rows * columns * layers]{ 0.0 }) {};
+        Matrix3D(uint16_t rows, uint16_t columns, uint16_t layers) : Matrix3D(rows, columns, layers, nullptr) {};
         
         /**
          * @brief Construct a new Matrix3D object from another Matrix3D object.
@@ -69,6 +69,13 @@ namespace Neuranet
          * @return The summed matrix. 
          */
         Matrix3D& operator+=(const Matrix3D& a);
+
+        /**
+         * @brief Adds a smaller matrix to the existing matrix starting at a given index.
+         *
+         * @param a The matrix to add to the current one.
+         */
+        void addSubmatrix(const Matrix3D& a, uint16_t rowStart, uint16_t colStart, uint16_t layStart);
 
         /**
          * @brief Overrides the subtraction operator such that two matrices can be subtracted.
@@ -125,7 +132,7 @@ namespace Neuranet
          * @param b The second matrix.
          * @return The hadamard product matrix. 
          */
-        static Matrix3D hadamardMultiply(const Matrix3D& a, const Matrix3D& b);
+        static Matrix3D hadamardProduct(const Matrix3D& a, const Matrix3D& b);
 
         /**
          * @brief Overrides the division operator such that a matrix can be individually divided.
@@ -165,6 +172,28 @@ namespace Neuranet
         void randomize(double minValue, double maxValue);
 
         /**
+         * @brief Returns the tranpose of the matrix.
+         *
+         * @return The transposed matrix.
+         */
+        Matrix3D getTranspose();
+
+        /**
+         * @brief Gets the flipped matrix along the horizontal axis.
+         */
+        Matrix3D getFlippedHori();
+
+        /**
+         * @brief Gets the flipped matrix along the vertical axis.
+         */
+        Matrix3D getFlippedVert();
+
+        /**
+         * @brief Gets the flipped matrix along the horizontal and vertical axis (180 degree rotation).
+         */
+        Matrix3D getFlippedHoriAndVert();
+
+        /**
          * @brief Raises the entries of a matrix to a power.
          * 
          * @param a The matrix to raise.
@@ -172,6 +201,14 @@ namespace Neuranet
          * @return The raised matrix.
          */
         static Matrix3D power(const Matrix3D& a, double factor);
+
+        /**
+         * @brief Raises the entries of a matrix to e to the orignal entry-th power.
+         *
+         * @param a The matrix to raise.
+         * @return The raised matrix.
+         */
+        static Matrix3D exponential(const Matrix3D& a);
 
         /**
          * @brief Returns the matrix with the absolute values of entries of the inputted matrix.
@@ -208,9 +245,18 @@ namespace Neuranet
         /**
          * @brief Flattens the entries of the matrix into a (m*n*p)x1 matrix.
          *
-         * @return The flattened 2D matrix.
+         * @return The vectorized 2D matrix.
          */
-        Matrix2D flatten();
+        Matrix2D getVectorized();
+
+        /**
+         * @brief Unflattens the entries of a 1xb matrix into an mxnxp matrix.
+         *
+         * @param rows The number of rows in the unflattened matrix.
+         * @param cols The number of columns in the unflattened matrix.
+         * @param lays The number of layers in the unflattened matrix.
+         */
+        void unflatten(uint16_t rows, uint16_t cols, uint16_t lays);
 
         /**
          * @brief Get the values of the entries as a 1-d array.

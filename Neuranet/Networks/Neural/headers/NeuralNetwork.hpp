@@ -6,7 +6,7 @@
 namespace Neuranet
 {
 	/**
-	 * @brief Class representing an artificial neural network
+	 * @brief Class representing an artificial neural network.
 	 * @author Nolan Bridges
 	 * @version 1.0.0
 	 */
@@ -67,6 +67,16 @@ namespace Neuranet
 		double getAverageLoss(const std::vector<Matrix2D>& inputs, const std::vector<Matrix2D>& expectedOutputs);
 
 		/**
+		 * @brief Gets the average loss of the model for the given input / output pairs.
+		 *
+		 * @param inputs The inputs to test.
+		 * @param expectedOutputs The corresponding expected outputs.
+		 *
+		 * @return The average loss of the model for the given input / output pairs.
+		 */
+		double getAverageLoss(std::vector<Matrix3D>& inputs, const std::vector<Matrix2D>& expectedOutputs);
+
+		/**
 		 * @brief Computes the output for the neural network with the given input.
 		 * 
 		 * @param input The mx1 matrix input.
@@ -84,6 +94,17 @@ namespace Neuranet
 		 * @param learningRate The learning rate of the model. Standard is 1.0.
 		 */
 		void learn(const std::vector<Matrix2D>& inputs, const std::vector<Matrix2D>& expectedOutputs, uint16_t epochs, uint16_t batchSize, double learningRate);
+
+		/**
+		 * @brief Provides the neural network with datapoints to test and adapt the model to.
+		 *
+		 * @param inputs The list of input matrices.
+		 * @param expectedOutputs The list of expected output matrices.
+		 * @param epochs The number of times for the model to learn from the dataset.
+		 * @param batchSize The number of input/outputs to get gradients from before modifying the weights and biases of the model with the averaged gradients.
+		 * @param learningRate The learning rate of the model. Standard is 1.0.
+		 */
+		void learn(std::vector<Matrix3D>& inputs, const std::vector<Matrix2D>& expectedOutputs, uint16_t epochs, uint16_t batchSize, double learningRate);
 
 		/**
 		 * @brief Provides the neural network with datapoints to test and adapt the model to.

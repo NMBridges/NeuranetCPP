@@ -18,30 +18,10 @@ namespace Neuranet
 			this->biases = std::vector<Matrix2D>(nodeCounts.size() - 1);
 		}
 
-		double lowerBound;
-		double upperBound;
-
-		switch (activationType)
-		{
-		case Activation::SIGMOID:
-			lowerBound = -1.0;
-			upperBound = 1.0;
-			break;
-		case Activation::RELU:
-			lowerBound = 0.001;
-			upperBound =   1.0;
-			break;
-		case Activation::RELU_NORMALIZED:
-			lowerBound = 0.001;
-			upperBound =   1.0;
-			break;
-		default:
-			lowerBound = -1.0;
-			upperBound =  1.0;
-		}
 
 		for (uint16_t layer = 0; layer < nodeCounts.size() - 1; layer += 1)
 		{
+			const auto [lowerBound, upperBound] = getWeightBounds(nodeCounts[layer + 1], nodeCounts[layer], activationType);
 			this->weights[layer] = Matrix2D(nodeCounts[layer + 1], nodeCounts[layer]);
 			this->weights[layer].randomize(lowerBound, upperBound);
 			this->biases[layer] = Matrix2D(nodeCounts[layer + 1], 1);
@@ -62,7 +42,21 @@ namespace Neuranet
 		double totalLoss = 0.0;
 		for (int index = 0; index < inputs.size(); index += 1)
 		{
-			totalLoss += loss(expectedOutputs[index], compute(inputs[index]));
+			totalLoss += loss(expectedOutputs[index], compute(inputs[index]), Loss::EUCLIDEAN);
+		}
+		return totalLoss / inputs.size();
+	}
+
+	double NeuralNetwork::getAverageLoss(std::vector<Matrix3D>& inputs, const std::vector<Matrix2D>& expectedOutputs)
+	{
+		if (inputs.size() == 0 || expectedOutputs.size() == 0)
+		{
+			return 0.0;
+		}
+		double totalLoss = 0.0;
+		for (int index = 0; index < inputs.size(); index += 1)
+		{
+			totalLoss += loss(expectedOutputs[index], compute(inputs[index].getVectorized()), Loss::EUCLIDEAN);
 		}
 		return totalLoss / inputs.size();
 	}
@@ -82,8 +76,10 @@ namespace Neuranet
 
 	void NeuralNetwork::learn(const std::vector<Matrix2D>& inputs, const std::vector<Matrix2D>& expectedOutputs, uint16_t epochs, uint16_t batchSize, double learningRate)
 	{
+		std::cout << "\nLearning...\n" << std::endl;
 		for (uint16_t epoch = 0; epoch < epochs; epoch += 1)
 		{
+			std::cout << std::format("Epoch {} of {}:\n", (epoch + 1), epochs) << std::endl;
 			for (int batchStartIndex = 0; batchStartIndex < inputs.size(); batchStartIndex += batchSize)
 			{
 				// Sums the gradients of the weights and biases for all datasets.
@@ -118,10 +114,14 @@ namespace Neuranet
 
 				for (uint16_t gradientIndex = 0; gradientIndex < this->weights.size(); gradientIndex += 1)
 				{
-					this->weights[gradientIndex] -= totalWeightGradients[gradientIndex] / thisBatchSize * learningRate;
-					this->biases[gradientIndex] -= totalBiasGradients[gradientIndex] / thisBatchSize * learningRate;
+					this->weights[gradientIndex] -= (totalWeightGradients[gradientIndex] / thisBatchSize) * learningRate;
+					this->biases[gradientIndex] -= (totalBiasGradients[gradientIndex] / thisBatchSize) * learningRate;
 				}
+
+				std::cout << std::format("\r\tBatch {} of {}  {}%", batchStartIndex / batchSize + 1, (inputs.size() / batchSize), (int)(10000.0 * (batchStartIndex / batchSize + 1) / (100.0 * inputs.size() / batchSize)));
 			}
+
+			std::cout << "\n" << std::endl;
 		}
 	}
 
@@ -131,6 +131,57 @@ namespace Neuranet
 		std::vector<Matrix2D> expouts;
 		Dataset::parse(inputsFilePath, expectedOutputsFilePath, ins, expouts);
 		learn(ins, expouts, epochs, batchSize, learningRate);
+	}
+
+	void NeuralNetwork::learn(std::vector<Matrix3D>& inputs, const std::vector<Matrix2D>& expectedOutputs, uint16_t epochs, uint16_t batchSize, double learningRate)
+	{
+		std::cout << "\nLearning...\n" << std::endl;
+		for (uint16_t epoch = 0; epoch < epochs; epoch += 1)
+		{
+			std::cout << std::format("Epoch {} of {}:\n", (epoch + 1), epochs) << std::endl;
+			for (int batchStartIndex = 0; batchStartIndex < inputs.size(); batchStartIndex += batchSize)
+			{
+				// Sums the gradients of the weights and biases for all datasets.
+
+				uint16_t thisBatchSize = std::min((uint16_t)(inputs.size() - batchStartIndex), batchSize);
+
+				std::vector<Matrix2D> totalWeightGradients = std::vector<Matrix2D>(this->weights.size());
+				std::vector<Matrix2D> totalBiasGradients = std::vector<Matrix2D>(this->biases.size());
+
+				for (int batchIndex = 0; batchIndex < thisBatchSize; batchIndex += 1)
+				{
+					std::vector<Matrix2D> weightGradients;
+					std::vector<Matrix2D> biasGradients;
+					getGradients(inputs[batchStartIndex + batchIndex].getVectorized(), expectedOutputs[batchStartIndex + batchIndex], weightGradients, biasGradients);
+
+					for (uint16_t gradientIndex = 0; gradientIndex < this->weights.size(); gradientIndex += 1)
+					{
+						if (totalWeightGradients[gradientIndex].getRowCount() == 0 && totalWeightGradients[gradientIndex].getColumnCount() == 0)
+						{
+							totalWeightGradients[gradientIndex] = weightGradients[gradientIndex];
+							totalBiasGradients[gradientIndex] = biasGradients[gradientIndex];
+						}
+						else
+						{
+							totalWeightGradients[gradientIndex] += weightGradients[gradientIndex];
+							totalBiasGradients[gradientIndex] += biasGradients[gradientIndex];
+						}
+					}
+				}
+
+				// Modifies the weights and biases by the average gradient of the batch.
+
+				for (uint16_t gradientIndex = 0; gradientIndex < this->weights.size(); gradientIndex += 1)
+				{
+					this->weights[gradientIndex] -= (totalWeightGradients[gradientIndex] / thisBatchSize) * learningRate;
+					this->biases[gradientIndex] -= (totalBiasGradients[gradientIndex] / thisBatchSize) * learningRate;
+				}
+
+				std::cout << std::format("\r\tBatch {} of {}  {}%", batchStartIndex / batchSize + 1, (inputs.size() / batchSize), (int)(10000.0 * (batchStartIndex / batchSize + 1) / (100.0 * inputs.size() / batchSize)));
+			}
+
+			std::cout << "\n" << std::endl;
+		}
 	}
 
 	void NeuralNetwork::learn(const std::vector<Matrix2D>& inputs, const std::vector<Matrix2D>& expectedOutputs, uint16_t epochs, uint16_t batchSize)
@@ -202,11 +253,13 @@ namespace Neuranet
 			Matrix2D sigma_lprime = activateDerivative(z_l, this->activationType);
 
 			/** Recalculates the cost at the current layer. */
-			if (layer == this->weights.size() - 1) {
-				delta_l = Matrix2D::hadamardMultiply(dCda_l, sigma_lprime);
+			if (layer == this->weights.size() - 1)
+			{
+				delta_l = Matrix2D::hadamardProduct(dCda_l, sigma_lprime);
 			}
-			else {
-				delta_l = Matrix2D::hadamardMultiply(weights[layer + 1].getTranspose() * delta_l, sigma_lprime);
+			else
+			{
+				delta_l = Matrix2D::hadamardProduct(weights[layer + 1].getTranspose() * delta_l, sigma_lprime);
 			}
 
 			/**
@@ -230,11 +283,15 @@ namespace Neuranet
 
 	void NeuralNetwork::writeToPath(std::string& folderPath)
 	{
-		_mkdir(folderPath.c_str());
+		int n = _mkdir(folderPath.c_str());
 		for (uint16_t layer = 0; layer < this->weights.size(); layer += 1)
 		{
 			Matrix3D layerWeights3D = Matrix3D(this->weights[layer].getRowCount(), this->weights[layer].getColumnCount(), 3);
-			Matrix2D layerWeightsRescaled = this->weights[layer].getRescaled(-255.0, 255.0);
+
+			double maximum = this->weights[layer].getValues()[this->weights[layer].getIndexOfMax()];
+			double minimum = this->weights[layer].getValues()[this->weights[layer].getIndexOfMin()];
+
+			Matrix2D layerWeightsRescaled = this->weights[layer] * 255.0 / (maximum > -minimum ? maximum : -minimum);
 
 			for (uint16_t row = 0; row < layerWeights3D.getRowCount(); row += 1)
 			{
@@ -260,13 +317,15 @@ namespace Neuranet
 	{
 		std::string out = "\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  Neural Network  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~";
 
-		if (this->weights.size() > 0) {
-			out += std::format("\n\n\tLAYER 1 ({} nodes)\n", weights[0].getColumnCount());
+		if (this->weights.size() > 0)
+		{
+			out += std::format("\n\n\tLAYER 1 ({} neurons)\n", weights[0].getColumnCount());
 		}
 
-		for (int index = 0; index < this->weights.size(); index += 1) {
+		for (int index = 0; index < this->weights.size(); index += 1)
+		{
 			out += std::format("\nWeights:{}\nBiases:{}", weights[index].toString(), biases[index].toString());
-			out += std::format("\n\tLAYER {} ({} nodes)\n", index + 2, weights[index].getRowCount());
+			out += std::format("\n\tLAYER {} ({} neurons)\n", index + 2, weights[index].getRowCount());
 		}
 		out += "\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
 		return out;
@@ -276,13 +335,15 @@ namespace Neuranet
 	{
 		std::string out = "\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  Neural Network  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~";
 
-		if (a.weights.size() > 0) {
-			out += std::format("\n\n\tLAYER 1 ({} nodes)\n", a.weights[0].getColumnCount());
+		if (a.weights.size() > 0)
+		{
+			out += std::format("\n\n\tLAYER 1 ({} neurons)\n", a.weights[0].getColumnCount());
 		}
 
-		for (int index = 0; index < a.weights.size(); index += 1) {
+		for (int index = 0; index < a.weights.size(); index += 1)
+		{
 			out += std::format("\nWeights:{}\nBiases:{}", Matrix2D(a.weights[index]).toString(), Matrix2D(a.biases[index]).toString());
-			out += std::format("\n\tLAYER {} ({} nodes)\n", index + 2, a.weights[index].getRowCount());
+			out += std::format("\n\tLAYER {} ({} neurons)\n", index + 2, a.weights[index].getRowCount());
 		}
 		out += "\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
 

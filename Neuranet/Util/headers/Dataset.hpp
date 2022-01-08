@@ -36,7 +36,17 @@ namespace Neuranet
 		 * @param inputs The variable to which to return the inputs.
 		 * @param expectedOutputs The variable to which to return the inputs.
 		 */
-		//static void parse(std::string& inputsFileName, std::string& expectedOutputsFileName, std::vector<Matrix3D>& inputs, std::vector<Matrix2D>& expectedOutputs);
+		static void parse(std::string& inputsFileName, std::string& expectedOutputsFileName, std::vector<Matrix3D>& inputs, std::vector<Matrix2D>& expectedOutputs);
+
+		/**
+		 * @brief Parses MNIST database files.
+		 * 
+		 * @param imagesFileName The path to the .idx3-ubyte file with the set of image data.
+		 * @param labelsFilePath The path to the .idx1-ubyte file with the set of image labels (expected outputs).
+		 * @param images The variable to which to return the images.
+		 * @param labels The variable to which to return the labels.
+		 */
+		static void parseMNISTimages(std::string& imagesFilePath, std::string& labelsFilePath, std::vector<Matrix3D>& images, std::vector<Matrix2D>& labels);
 
 	};
 }

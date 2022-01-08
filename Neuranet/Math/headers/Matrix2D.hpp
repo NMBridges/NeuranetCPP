@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CL/cl.hpp"
 #include "Matrix.hpp"
 
 namespace Neuranet
@@ -20,19 +21,39 @@ namespace Neuranet
 
     public:
         /**
+         * @brief OpenCL / GPU acceleration variables.
+         */
+        static inline cl::Platform cl_platform;
+        static inline cl::Device cl_device;
+        static inline cl::Context cl_context;
+        static inline cl::Program cl_program;
+        static inline cl::Kernel cl_plus1Kernel;
+        static inline cl::Kernel cl_plus2Kernel;
+        static inline cl::Kernel cl_plus3Kernel;
+        static inline cl::Kernel cl_plus4Kernel;
+        static inline cl::Kernel cl_multiply1Kernel;
+
+    public:
+        /**
          * @brief Construct a new Matrix2D object with size 0.
          */
-        Matrix2D() : Matrix2D(0, 0, (double*)new double[0]{}) {};
+        Matrix2D() : Matrix2D(0, 0, nullptr) {};
         
         /**
          * @brief Construct a new Matrix2D object with the specified dimensions and values.
          */
         Matrix2D(uint16_t rows, uint16_t columns, double* values);
+
+        /**
+         * @brief Construct a new Matrix2D object with the specified dimensions, filled entirely by
+         *        by the specified value.
+         */
+        Matrix2D(uint16_t rows, uint16_t columns, double value);
         
         /**
          * @brief Construct a new Matrix2D object with the specified dimensions (default values = 0.0).
          */
-        Matrix2D(uint16_t rows, uint16_t columns) : Matrix2D(rows, columns, (double*)new double[rows * columns]{ 0.0 }) {};
+        Matrix2D(uint16_t rows, uint16_t columns) : Matrix2D(rows, columns, nullptr) {};
         
         /**
          * @brief Construct a new Matrix2D object from another Matrix2D object.
@@ -43,11 +64,29 @@ namespace Neuranet
          * @brief Destroys the Matrix2D object.
          */
         ~Matrix2D();
+    
+    protected:
+        /**
+         * @brief Creates a Matrix2D object with the specified dimensions and no ininitialized values.
+         */
+        static Matrix2D createUninitialized(uint16_t rows, uint16_t columns);
+
+    public:
+
+        /**
+         * @brief Initializes variables used for GPU acceleration.
+         */
+        static void initializeOpenCL();
 
         /**
          * @brief Zeroes the entries of the matrix.
          */
         void zero();
+
+        /**
+         * @brief Sets the entries of the matrix to one.
+         */
+        void one();
 
         /**
          * @brief Overrides the addition operator such that two matrices can be added.
@@ -56,6 +95,14 @@ namespace Neuranet
          * @return The summed matrix. 
          */
         Matrix2D operator+(const Matrix2D& a);
+
+        /**
+         * @brief Overrides the addition operator such that a matrix can be incremented entry-wise by a scalar.
+         *
+         * @param a The value to add to the current matrix entries.
+         * @return The summed matrix.
+         */
+        Matrix2D operator+(double a);
 
         /**
          * @brief Overrides the addition operator such that two matrices can be added.
@@ -72,6 +119,14 @@ namespace Neuranet
          * @return The difference matrix. 
          */
         Matrix2D operator-(const Matrix2D& a);
+
+        /**
+         * @brief Overrides the addition operator such that a matrix can be incremented entry-wise by a scalar.
+         *
+         * @param a The value to add to the current matrix entries.
+         * @return The summed matrix.
+         */
+        Matrix2D operator-(double a);
 
         /**
          * @brief Overrides the subtraction operator such that two matrices can be subtracted.
@@ -120,7 +175,7 @@ namespace Neuranet
          * @param b The second matrix.
          * @return The hadamard product matrix. 
          */
-        static Matrix2D hadamardMultiply(const Matrix2D& a, const Matrix2D& b);
+        static Matrix2D hadamardProduct(const Matrix2D& a, const Matrix2D& b);
 
         /**
          * @brief Overrides the division operator such that a matrix can be individually divided.
@@ -139,9 +194,17 @@ namespace Neuranet
         Matrix2D& operator/=(double factor);
 
         /**
+         * @brief Divides two matrices in an element-wise fashion.
+         *
+         * @param a The first matrix.
+         * @param b The second matrix.
+         * @return The hadamard quotient matrix.
+         */
+        static Matrix2D hadamardQuotient(const Matrix2D& a, const Matrix2D& b);
+
+        /**
          * @brief Creates an array of specified dimensions with random values between
          *        the two specified values.
-         *        NOTE: CURRENTLY DOES NOT WORK.
          * 
          * @param rows The number of rows in the matrix.
          * @param columns The number of columns in the matrix.
@@ -168,12 +231,28 @@ namespace Neuranet
 
         /**
          * @brief Raises the entries of a matrix to a power.
-         * 
+         *
          * @param a The matrix to raise.
          * @param factor The power to raise each entry to.
          * @return The raised matrix.
          */
         static Matrix2D power(const Matrix2D& a, double factor);
+
+        /**
+         * @brief Raises the entries of a matrix to e to the orignal entry-th power.
+         *
+         * @param a The matrix to raise.
+         * @return The raised matrix.
+         */
+        static Matrix2D exponential(const Matrix2D& a);
+
+        /**
+         * @brief Finds the entry-wise log of the matrix.
+         *
+         * @param a The matrix of which to find the log of each entry.
+         * @return The logged matrix.
+         */
+        static Matrix2D logarithmic(const Matrix2D& a);
 
         /**
          * @brief Returns the matrix with the absolute values of entries of the inputted matrix.
@@ -202,9 +281,9 @@ namespace Neuranet
         /**
          * @brief Flattens the entries of the matrix into a (m*n*p)x1 matrix.
          *
-         * @return The flattened 2D matrix.
+         * @return The vectorized 2D matrix.
          */
-        Matrix2D flatten();
+        Matrix2D getVectorized();
 
         /**
          * @brief Get the values of the entries as a 1-d array.

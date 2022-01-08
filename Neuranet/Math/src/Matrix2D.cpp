@@ -3,6 +3,7 @@
 #include <ctime>
 #include <chrono>
 #include <format>
+#include <fstream>
 #include "../headers/Matrix2D.hpp"
 #include <Windows.h>
 
@@ -19,9 +20,34 @@ namespace Neuranet
 
         this->values = new double[rows * columns];
 
+        if (values != nullptr)
+        {
+            for (int index = 0; index < this->rowCount * this->colCount; index += 1)
+            {
+                this->values[index] = values[index];
+            }
+        }
+        else
+        {
+            for (int index = 0; index < this->rowCount * this->colCount; index += 1)
+            {
+                this->values[index] = 0.0;
+            }
+        }
+    }
+
+    Matrix2D::Matrix2D(uint16_t rows, uint16_t columns, double value)
+    {
+        this->dimensionCount = 2;
+
+        this->rowCount = rows;
+        this->colCount = columns;
+
+        this->values = new double[rows * columns];
+
         for (int index = 0; index < this->rowCount * this->colCount; index += 1)
         {
-            this->values[index] = values[index];
+            this->values[index] = value;
         }
     }
 
@@ -30,11 +56,131 @@ namespace Neuranet
         delete[] this->values;
     }
 
+    Matrix2D Matrix2D::createUninitialized(uint16_t rows, uint16_t columns)
+    {
+        Matrix2D uninitialized = Matrix2D();
+
+        uninitialized.rowCount = rows;
+        uninitialized.colCount = columns;
+
+        delete[] uninitialized.values;
+        uninitialized.values = nullptr;
+        uninitialized.values = new double[rows * columns];
+
+        return uninitialized;
+    }
+
+    void Matrix2D::initializeOpenCL()
+    {
+        std::vector<cl::Platform> platforms;
+        cl::Platform::get(&platforms);
+        Matrix2D::cl_platform = platforms.front();
+
+        std::vector<cl::Device> devices;
+        Matrix2D::cl_platform.getDevices(CL_DEVICE_TYPE_GPU, &devices);
+        Matrix2D::cl_device = devices.front();
+
+        Matrix2D::cl_context = cl::Context(devices.front());
+
+        std::string m2dstring = "__kernel void plus1(__global const double* a, __global const double* b, __global const int* rows, __global const int* columns, __global double* c)"
+                                "{"
+                                    "int arrLength = *rows * *columns;"
+                                    "for (int gid = get_global_id(0); gid < arrLength; gid += 1024)"
+                                    "{"
+                                        "c[gid] = a[gid] + b[gid];"
+                                    "}"
+                                "}"
+                                "__kernel void plus2(__global const double* a, __global const double* b, __global const int* rows, __global const int* columns, __global double* c)"
+                                "{"
+                                    "int arrLength = *rows * *columns;"
+                                    "for (int gid = get_global_id(0); gid < arrLength; gid += 1024)"
+                                    "{"
+                                        "c[gid] = a[gid] + b[0];"
+                                    "}"
+                                "}"
+                                "__kernel void plus3(__global double* a, __global const double* b, __global const int* rows, __global const int* columns)"
+                                "{"
+                                    "int arrLength = *rows * *columns;"
+                                    "for (int gid = get_global_id(0); gid < arrLength; gid += 1024)"
+                                    "{"
+                                        "a[gid] += b[gid];"
+                                    "}"
+                                "}"
+                                "__kernel void multiply1(__global const double* a, __global const int* aRows, __global const int* aCols, __global const double* b, __global const int* bRows, __global const int* bCols, __global double* c)"
+                                "{"
+                                    "int arrLength = *aRows * *bCols;"
+                                    "for (int gid = get_global_id(0); gid < arrLength; gid += 128)"
+                                    "{"
+                                        "int rowOffset = gid / *bCols * *aCols;"
+                                        "int col = gid % *bCols;"
+                                        "double dotProduct = 0.0;"
+                                        "for (int i = 0; i < *aCols; i += 1)"
+                                        "{"
+                                            "dotProduct += a[rowOffset + i] * b[i * *bCols + col];"
+                                        "}"
+                                        "c[gid] = dotProduct;"
+                                    "}"
+                                "}";
+
+        cl::Program::Sources sources = cl::Program::Sources(1, std::make_pair(m2dstring.c_str(), m2dstring.length() + 1));
+
+        Matrix2D::cl_program = cl::Program(Matrix2D::cl_context, sources);
+
+        cl_int err = Matrix2D::cl_program.build("-cl-std=CL1.2");
+
+        std::cout << Matrix2D::cl_program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(Matrix2D::cl_device, &err);
+
+        bool hadError = false;
+        cl_int lastErr;
+
+        Matrix2D::cl_plus1Kernel = cl::Kernel(Matrix2D::cl_program, "plus1", &err);
+        if (err != 0)
+        {
+            hadError = true;
+            lastErr = err;
+        }
+        Matrix2D::cl_plus2Kernel = cl::Kernel(Matrix2D::cl_program, "plus2", &err);
+        if (err != 0)
+        {
+            hadError = true;
+            lastErr = err;
+        }
+        Matrix2D::cl_plus3Kernel = cl::Kernel(Matrix2D::cl_program, "plus3", &err);
+        if (err != 0)
+        {
+            hadError = true;
+            lastErr = err;
+        }
+        Matrix2D::cl_multiply1Kernel = cl::Kernel(Matrix2D::cl_program, "multiply1", &err);
+        if (err != 0)
+        {
+            hadError = true;
+            lastErr = err;
+        }
+
+        if (!hadError)
+        {
+            std::cout << "OpenCL initialized successfully." << std::endl;
+        }
+        else
+        {
+            std::cout << "Error " << lastErr << std::endl;
+        }
+    }
+
     void Matrix2D::zero()
     {
         for (int index = 0; index < this->rowCount * this->colCount; index += 1)
         {
             this->values[index] = 0.0;
+        }
+    }
+
+    void Matrix2D::one()
+    {
+        for (int index = 0; index < this->rowCount * this->colCount; index += 1)
+        {
+            this->values[index] = 1.0;
         }
     }
 
@@ -48,11 +194,62 @@ namespace Neuranet
             throw excep;
         }
 
-        Matrix2D summedMatrix(a.rowCount, a.colCount);
+        Matrix2D summedMatrix = createUninitialized(a.rowCount, a.colCount);
+
+        /** I have found that this process is faster on the CPU for some reason. */
+        //cl_int err;
+        //cl::Buffer memBuf1(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(double) * this->rowCount * this->colCount, this->values, &err);
+        ////std::cout << "1 " << err << std::endl;
+        //cl::Buffer memBuf2(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(double) * this->rowCount * this->colCount, a.values, &err);
+        ////std::cout << "2 " << err << std::endl;
+        //
+        //cl_int rC = a.rowCount;
+        //cl::Buffer memBuf3(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &rC, &err);
+        ////std::cout << "3 " << err << std::endl;
+        //
+        //cl_int cC = a.colCount;
+        //cl::Buffer memBuf4(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &cC, &err);
+        ////std::cout << "4 " << err << std::endl;
+        //
+        //cl::Buffer memBuf5(Matrix2D::cl_context, CL_MEM_READ_WRITE | CL_MEM_HOST_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(double) * this->rowCount * this->colCount, summedMatrix.values, &err);
+        ////std::cout << "5 " << err << std::endl;
+        //err = Matrix2D::cl_plus1Kernel.setArg(0, memBuf1());
+        ////std::cout << "6 " << err << std::endl;
+        //err = Matrix2D::cl_plus1Kernel.setArg(1, memBuf2());
+        ////std::cout << "7 " << err << std::endl;
+        //err = Matrix2D::cl_plus1Kernel.setArg(2, memBuf3());
+        ////std::cout << "8 " << err << std::endl;
+        //err = Matrix2D::cl_plus1Kernel.setArg(3, memBuf4());
+        ////std::cout << "9 " << err << std::endl;
+        //err = Matrix2D::cl_plus1Kernel.setArg(4, memBuf5());
+        ////std::cout << "10 " << err << std::endl;
+        //
+        //cl::CommandQueue queue(Matrix2D::cl_context, Matrix2D::cl_device);
+        //
+        //constexpr int magicInt = 4096;
+        //int local = min(magicInt, this->rowCount * this->colCount);
+        //int global = (int)ceil((this->rowCount * this->colCount) * 1.0 / local) * local;
+        //
+        //queue.enqueueNDRangeKernel(Matrix2D::cl_plus1Kernel, cl::NullRange, cl::NDRange(global), cl::NDRange(local));
+        //queue.finish();
+        //queue.enqueueReadBuffer(memBuf5, CL_FALSE, 0, sizeof(double) * this->rowCount * this->colCount, summedMatrix.values);
+        //queue.finish();
         
         for (int index = 0; index < this->rowCount * this->colCount; index += 1)
         {
             summedMatrix.values[index] = this->values[index] + a.values[index];
+        }
+
+        return summedMatrix;
+    }
+
+    Matrix2D Matrix2D::operator+(double a)
+    {
+        Matrix2D summedMatrix = createUninitialized(this->rowCount, this->colCount);
+
+        for (int index = 0; index < this->rowCount * this->colCount; index += 1)
+        {
+            summedMatrix.values[index] = this->values[index] + a;
         }
 
         return summedMatrix;
@@ -96,6 +293,18 @@ namespace Neuranet
         return differenceMatrix;
     }
 
+    Matrix2D Matrix2D::operator-(double a)
+    {
+        Matrix2D differenceMatrix(this->rowCount, this->colCount);
+
+        for (int index = 0; index < this->rowCount * this->colCount; index += 1)
+        {
+            differenceMatrix.values[index] = this->values[index] - a;
+        }
+
+        return differenceMatrix;
+    }
+
     Matrix2D& Matrix2D::operator-=(const Matrix2D& a)
     {
         if (this->rowCount != a.rowCount || this->colCount != a.colCount)
@@ -124,20 +333,72 @@ namespace Neuranet
             throw excep;
         }
 
-        Matrix2D productMatrix = Matrix2D(this->rowCount, a.colCount);
-        
+        Matrix2D productMatrix = Matrix2D::createUninitialized(this->rowCount, a.colCount);
+
+        //cl_int err;
+        //cl::Buffer memBuf1(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(double) * this->rowCount * this->colCount, this->values, &err);
+        ////std::cout << "1 " << err << std::endl;
+        //
+        //cl_int rC1 = this->rowCount;
+        //cl::Buffer memBuf2(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &rC1, &err);
+        ////std::cout << "2 " << err << std::endl;
+        //
+        //cl_int cC1 = this->colCount;
+        //cl::Buffer memBuf3(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &cC1, &err);
+        ////std::cout << "3 " << err << std::endl;
+        //
+        //cl::Buffer memBuf4(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(double) * a.rowCount * a.colCount, a.values, &err);
+        ////std::cout << "4 " << err << std::endl;
+        //
+        //cl_int rC2 = a.rowCount;
+        //cl::Buffer memBuf5(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &rC2, &err);
+        ////std::cout << "5 " << err << std::endl;
+        //
+        //cl_int cC2 = a.colCount;
+        //cl::Buffer memBuf6(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &cC2, &err);
+        ////std::cout << "6 " << err << std::endl;
+        //
+        //cl::Buffer memBuf7(Matrix2D::cl_context, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, sizeof(double) * this->rowCount * a.colCount, productMatrix.values, &err);
+        ////std::cout << "7 " << err << std::endl;
+        //
+        //err = Matrix2D::cl_multiply1Kernel.setArg(0, memBuf1());
+        ////std::cout << "8 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(1, memBuf2());
+        ////std::cout << "9 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(2, memBuf3());
+        ////std::cout << "10 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(3, memBuf4());
+        ////std::cout << "11 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(4, memBuf5());
+        ////std::cout << "12 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(5, memBuf6());
+        ////std::cout << "13 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(6, memBuf7());
+        ////std::cout << "14 " << err << std::endl;
+        //
+        //cl::CommandQueue queue(Matrix2D::cl_context, Matrix2D::cl_device);
+        //
+        //constexpr int magicInt = 4096;
+        //int local = min(magicInt, this->rowCount * a.colCount);
+        //int global = (int) ceil((this->rowCount * a.colCount) * 1.0 / local) * local;
+        //
+        //queue.enqueueNDRangeKernel(Matrix2D::cl_multiply1Kernel, cl::NullRange, cl::NDRange(global), cl::NDRange(local));
+        //queue.finish();
+        //queue.enqueueReadBuffer(memBuf7, CL_FALSE, 0, sizeof(double) * this->rowCount * a.colCount, productMatrix.values);
+        //queue.finish();
+
         for (uint16_t row = 0; row < this->rowCount; row += 1)
         {
             for (uint16_t col = 0; col < a.colCount; col += 1)
             {
                 // The dot product of the 'row'th row of the original matrix and the 'col'th col of matrix a.
                 double dotProduct = 0.0;
-
+        
                 for (uint16_t i = 0; i < this->colCount; i += 1)
                 {
                     dotProduct += this->values[row * this->colCount + i] * a.values[i * a.colCount + col];
                 }
-
+        
                 productMatrix.set(row, col, dotProduct);
             }
         }
@@ -161,7 +422,59 @@ namespace Neuranet
 
         delete[] this->values;
         this->values = nullptr;
-        this->values = new double[this->rowCount* this->colCount];
+        this->values = new double[this->rowCount * this->colCount];
+        
+        //cl_int err;
+        //cl::Buffer memBuf1(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(double) * previousMatrix.rowCount * previousMatrix.colCount, previousMatrix.values, &err);
+        ////std::cout << "1 " << err << std::endl;
+        //
+        //cl_int rC1 = previousMatrix.rowCount;
+        //cl::Buffer memBuf2(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &rC1, &err);
+        ////std::cout << "2 " << err << std::endl;
+        //
+        //cl_int cC1 = previousMatrix.colCount;
+        //cl::Buffer memBuf3(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &cC1, &err);
+        ////std::cout << "3 " << err << std::endl;
+        //
+        //cl::Buffer memBuf4(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(double) * a.rowCount * a.colCount, a.values, &err);
+        ////std::cout << "4 " << err << std::endl;
+        //
+        //cl_int rC2 = a.rowCount;
+        //cl::Buffer memBuf5(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &rC2, &err);
+        ////std::cout << "5 " << err << std::endl;
+        //
+        //cl_int cC2 = a.colCount;
+        //cl::Buffer memBuf6(Matrix2D::cl_context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, sizeof(cl_int), &cC2, &err);
+        ////std::cout << "6 " << err << std::endl;
+        //
+        //cl::Buffer memBuf7(Matrix2D::cl_context, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, sizeof(double) * this->rowCount * this->colCount, this->values, &err);
+        ////std::cout << "7 " << err << std::endl;
+        //
+        //err = Matrix2D::cl_multiply1Kernel.setArg(0, memBuf1());
+        ////std::cout << "8 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(1, memBuf2());
+        ////std::cout << "9 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(2, memBuf3());
+        ////std::cout << "10 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(3, memBuf4());
+        ////std::cout << "11 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(4, memBuf5());
+        ////std::cout << "12 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(5, memBuf6());
+        ////std::cout << "13 " << err << std::endl;
+        //err = Matrix2D::cl_multiply1Kernel.setArg(6, memBuf7());
+        ////std::cout << "14 " << err << std::endl;
+        //
+        //cl::CommandQueue queue(Matrix2D::cl_context, Matrix2D::cl_device);
+        //
+        //constexpr int magicInt = 4096;
+        //int local = min(magicInt, this->rowCount * this->colCount);
+        //int global = (int)ceil((this->rowCount * this->colCount) * 1.0 / local) * local;
+        //
+        //queue.enqueueNDRangeKernel(Matrix2D::cl_multiply1Kernel, cl::NullRange, cl::NDRange(global), cl::NDRange(local));
+        //queue.finish();
+        //queue.enqueueReadBuffer(memBuf7, CL_FALSE, 0, sizeof(double) * this->rowCount * this->colCount, this->values);
+        //queue.finish();
 
         for (uint16_t row = 0; row < this->rowCount; row += 1)
         {
@@ -169,12 +482,12 @@ namespace Neuranet
             {
                 // The dot product of the 'row'th row of the original matrix and the 'col'th col of matrix a.
                 double dotProduct = 0.0;
-
+        
                 for (uint16_t i = 0; i < this->colCount; i += 1)
                 {
                     dotProduct += previousMatrix.values[row * previousMatrix.colCount + i] * a.values[i * a.colCount + col];
                 }
-
+        
                 this->set(row, col, dotProduct);
             }
         }
@@ -204,7 +517,7 @@ namespace Neuranet
         return *this;
     }
 
-    Matrix2D Matrix2D::hadamardMultiply(const Matrix2D& a, const Matrix2D& b)
+    Matrix2D Matrix2D::hadamardProduct(const Matrix2D& a, const Matrix2D& b)
     {
         if (a.rowCount != b.rowCount || a.colCount != b.colCount)
         {
@@ -246,12 +559,32 @@ namespace Neuranet
         return *this;
     }
 
+    Matrix2D Matrix2D::hadamardQuotient(const Matrix2D& a, const Matrix2D& b)
+    {
+        if (a.rowCount != b.rowCount || a.colCount != b.colCount)
+        {
+            std::string header = "Matrix2D Matrix2D::hadamardMultiply(const Matrix2D& a, const Matrix2D& b)";
+            std::string excep = std::format("Exception at: {}\n\tMatrices of dimensions {}x{} and {}x{} cannot be multiplied element-wise.",
+                header, std::to_string(a.rowCount), a.colCount, b.rowCount, b.colCount);
+            throw excep;
+        }
+
+        Matrix2D productMatrix(a.rowCount, a.colCount);
+
+        for (int index = 0; index < a.rowCount * a.colCount; index += 1)
+        {
+            productMatrix.values[index] = a.values[index] / b.values[index];
+        }
+
+        return productMatrix;
+    }
+
     Matrix2D Matrix2D::random(uint16_t rows, uint16_t columns, double minValue, double maxValue)
     {
         Matrix2D::randomSeed += 1;
-        std::srand(static_cast<std::time_t>(Matrix2D::randomSeed) * std::time(NULL) * GetTickCount64());
+        std::srand(static_cast<std::time_t>(Matrix2D::randomSeed) * std::time(NULL) * std::chrono::steady_clock::now().time_since_epoch().count() * GetTickCount64());
         
-        Matrix2D randomMatrix = Matrix2D(rows, columns);
+        Matrix2D randomMatrix = Matrix2D::createUninitialized(rows, columns);
         
         for (int index = 0; index < rows * columns; index += 1)
         {
@@ -264,6 +597,9 @@ namespace Neuranet
 
     void Matrix2D::randomize(double minValue, double maxValue)
     {
+        Matrix2D::randomSeed += 1;
+        std::srand(static_cast<std::time_t>(Matrix2D::randomSeed) * std::time(NULL) * std::chrono::steady_clock::now().time_since_epoch().count() * GetTickCount64());
+
         for (int index = 0; index < this->rowCount * this->colCount; index += 1)
         {
             double percent = (double) std::rand() / RAND_MAX;
@@ -279,7 +615,31 @@ namespace Neuranet
         {
             powerMatrix.values[index] = pow(a.values[index], factor);
         }
-        
+
+        return powerMatrix;
+    }
+
+    Matrix2D Matrix2D::exponential(const Matrix2D& a)
+    {
+        Matrix2D powerMatrix(a.rowCount, a.colCount);
+
+        for (int index = 0; index < a.rowCount * a.colCount; index += 1)
+        {
+            powerMatrix.values[index] = exp(a.values[index]);
+        }
+
+        return powerMatrix;
+    }
+
+    Matrix2D Matrix2D::logarithmic(const Matrix2D& a)
+    {
+        Matrix2D powerMatrix(a.rowCount, a.colCount);
+
+        for (int index = 0; index < a.rowCount * a.colCount; index += 1)
+        {
+            powerMatrix.values[index] = log(a.values[index]);
+        }
+
         return powerMatrix;
     }
 
@@ -294,6 +654,7 @@ namespace Neuranet
                 transposeMatrix.set(col, row, this->values[row * this->colCount + col]);
             }
         }
+
         return transposeMatrix;
     }
 
@@ -351,7 +712,7 @@ namespace Neuranet
         return columns;
     }
 
-    Matrix2D Matrix2D::flatten()
+    Matrix2D Matrix2D::getVectorized()
     {
         Matrix2D flattened(this->rowCount * this->colCount, 1);
 
@@ -713,6 +1074,7 @@ namespace Neuranet
         {
             return *this;
         }
+
         this->rowCount = a.rowCount;
         this->colCount = a.colCount;
 

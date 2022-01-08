@@ -21,9 +21,19 @@ namespace Neuranet
 
         this->values = new double[rows * columns * layers];
 
-        for (int index = 0; index < this->rowCount * this->colCount * this->layCount; index += 1)
+        if (values != nullptr)
         {
-            this->values[index] = values[index];
+            for (int index = 0; index < this->rowCount * this->colCount * this->layCount; index += 1)
+            {
+                this->values[index] = values[index];
+            }
+        }
+        else
+        {
+            for (int index = 0; index < this->rowCount * this->colCount * this->layCount; index += 1)
+            {
+                this->values[index] = 0.0;
+            }
         }
     }
 
@@ -76,6 +86,24 @@ namespace Neuranet
         }
         
         return *this;
+    }
+
+    void Matrix3D::addSubmatrix(const Matrix3D& a, uint16_t rowStart, uint16_t colStart, uint16_t layStart)
+    {
+        uint16_t rowEnd = (this->rowCount < rowStart + a.rowCount) ? this->rowCount : rowStart + a.rowCount;
+        uint16_t colEnd = (this->colCount < colStart + a.colCount) ? this->colCount : colStart + a.colCount;
+        uint16_t layEnd = (this->layCount < layStart + a.layCount) ? this->layCount : layStart + a.layCount;
+        
+        for (uint16_t lay = (layStart > 0 ? layStart : 0); lay < layEnd; lay += 1)
+        {
+            for (uint16_t row = (rowStart > 0 ? rowStart : 0); row < rowEnd; row += 1)
+            {
+                for (uint16_t col = (colStart > 0 ? colStart : 0); col < colEnd; col += 1)
+                {
+                    set(row, col, lay, a.values[(col - colStart) + (row - rowStart) * a.colCount + (lay - layStart) * a.colCount * a.rowCount]);
+                }
+            }
+        }
     }
 
     Matrix3D Matrix3D::operator-(const Matrix3D& a)
@@ -215,7 +243,7 @@ namespace Neuranet
         return *this;
     }
 
-    Matrix3D Matrix3D::hadamardMultiply(const Matrix3D& a, const Matrix3D& b)
+    Matrix3D Matrix3D::hadamardProduct(const Matrix3D& a, const Matrix3D& b)
     {
         if (a.rowCount != b.rowCount || a.colCount != b.colCount || a.layCount != b.layCount)
         {
@@ -282,6 +310,83 @@ namespace Neuranet
         }
     }
 
+    /**
+     * @brief Returns the tranpose of the matrix.
+     *
+     * @return The transposed matrix.
+     */
+    Matrix3D Matrix3D::getTranspose()
+    {
+        Matrix3D transposeMatrix(this->colCount, this->rowCount, this->layCount);
+
+        for (uint16_t lay = 0; lay < this->layCount; lay += 1)
+        {
+            for (uint16_t row = 0; row < this->rowCount; row += 1)
+            {
+                for (uint16_t col = 0; col < this->colCount; col += 1)
+                {
+                    transposeMatrix.set(col, row, lay, this->values[row * this->colCount + col]);
+                }
+            }
+        }
+        
+        return transposeMatrix;
+    }
+
+    Matrix3D Matrix3D::getFlippedHori()
+    {
+        Matrix3D flippedMatrix = Matrix3D(this->rowCount, this->colCount, this->layCount);
+
+        for (uint16_t lay = 0; lay < this->layCount; lay += 1)
+        {
+            for (uint16_t row = 0; row < this->rowCount; row += 1)
+            {
+                for (uint16_t col = 0; col < this->colCount; col += 1)
+                {
+                    flippedMatrix.set(row, col, lay, get(this->rowCount - row - 1, col, lay));
+                }
+            }
+        }
+
+        return flippedMatrix;
+    }
+
+    Matrix3D Matrix3D::getFlippedVert()
+    {
+        Matrix3D flippedMatrix = Matrix3D(this->rowCount, this->colCount, this->layCount);
+
+        for (uint16_t lay = 0; lay < this->layCount; lay += 1)
+        {
+            for (uint16_t row = 0; row < this->rowCount; row += 1)
+            {
+                for (uint16_t col = 0; col < this->colCount; col += 1)
+                {
+                    flippedMatrix.set(row, col, lay, get(row, this->colCount - col - 1, lay));
+                }
+            }
+        }
+
+        return flippedMatrix;
+    }
+
+    Matrix3D Matrix3D::getFlippedHoriAndVert()
+    {
+        Matrix3D flippedMatrix = Matrix3D(this->rowCount, this->colCount, this->layCount);
+
+        for (uint16_t lay = 0; lay < this->layCount; lay += 1)
+        {
+            for (uint16_t row = 0; row < this->rowCount; row += 1)
+            {
+                for (uint16_t col = 0; col < this->colCount; col += 1)
+                {
+                    flippedMatrix.set(row, col, lay, get(this->rowCount - row - 1, this->colCount - col - 1, lay));
+                }
+            }
+        }
+
+        return flippedMatrix;
+    }
+
     Matrix3D Matrix3D::power(const Matrix3D& a, double factor)
     {
         Matrix3D powerMatrix(a.rowCount, a.colCount, a.layCount);
@@ -290,7 +395,19 @@ namespace Neuranet
         {
             powerMatrix.values[index] = pow(a.values[index], factor);
         }
-        
+
+        return powerMatrix;
+    }
+
+    Matrix3D Matrix3D::exponential(const Matrix3D& a)
+    {
+        Matrix3D powerMatrix(a.rowCount, a.colCount, a.layCount);
+
+        for (int index = 0; index < a.rowCount * a.colCount * a.layCount; index += 1)
+        {
+            powerMatrix.values[index] = exp(a.values[index]);
+        }
+
         return powerMatrix;
     }
 
@@ -387,7 +504,7 @@ namespace Neuranet
         return layers;
     }
 
-    Matrix2D Matrix3D::flatten()
+    Matrix2D Matrix3D::getVectorized()
     {
         Matrix2D flattened(this->rowCount * this->colCount * this->layCount, 1);
 
@@ -397,6 +514,13 @@ namespace Neuranet
         }
 
         return flattened;
+    }
+
+    void Matrix3D::unflatten(uint16_t rows, uint16_t cols, uint16_t lays)
+    {
+        this->rowCount = rows;
+        this->colCount = cols;
+        this->layCount = lays;
     }
 
     double* Matrix3D::getValues()
@@ -567,7 +691,7 @@ namespace Neuranet
             {
                 if (col < a.colCount && lay < a.layCount)
                 {
-                    this->values[col + row * this->colCount + lay * this->colCount * this->rowCount] = a.values[col + lay * this->colCount * this->rowCount];
+                    this->values[col + row * this->colCount + lay * this->colCount * this->rowCount] = a.values[col + lay * a.colCount * a.rowCount];
                 }
                 else
                 {
@@ -592,7 +716,7 @@ namespace Neuranet
             {
                 if (row < a.rowCount && lay < a.layCount)
                 {
-                    this->values[col + row * this->colCount + lay * this->colCount * this->rowCount] = a.values[col + lay * this->colCount * this->rowCount];
+                    this->values[col + row * this->colCount + lay * this->colCount * this->rowCount] = a.values[row * a.colCount + lay * a.colCount * a.rowCount];
                 }
                 else
                 {
@@ -619,7 +743,7 @@ namespace Neuranet
             {
                 if (row < a.rowCount && col < a.colCount)
                 {
-                    this->values[col + row * this->colCount + layerOffset] = a.values[col + row * this->colCount];
+                    this->values[col + row * this->colCount + layerOffset] = a.values[col + row * a.colCount];
                 }
                 else
                 {
@@ -670,6 +794,11 @@ namespace Neuranet
 
     Matrix3D& Matrix3D::operator=(const Matrix3D& a)
     {
+        if (this == &a)
+        {
+            return *this;
+        }
+
         this->rowCount = a.rowCount;
         this->colCount = a.colCount;
         this->layCount = a.layCount;
